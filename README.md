@@ -51,13 +51,28 @@ Creates a new turntable controller with the given input parameters.
 
 ## Interaction
 
-#### `controller.translate(t, x, y, z)`
-
 #### `controller.pan(t, x, y)`
 
 #### `controller.zoom(t, r)`
 
 #### `controller.rotate(t, dx, dy)`
+
+#### `controller.setEye(t, x, y, z)`
+
+#### `controller.moveEye(t, dx, dy, dz)`
+
+#### `controller.lookAt(t, center, up, eye)`
+
+#### `controller.setUp(t, up)`
+
+#### `controller.recenter(t)`
+
+
+## State logging
+
+#### `controller.flush(t)`
+
+#### `controller.idle(t)`
 
 # License
 (c) 2015 Mikola Lysenko. MIT License

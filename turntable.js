@@ -1,9 +1,16 @@
 'use strict'
 
+module.exports = createTurntableController
+
 var filterVector = require('filtered-vector')
-var lookAt = require('gl-mat4/look-at')
-var cross  = require('gl-vec3/cross')
-var normalize3 = require('gl-vec3/normalize')
+var lookAt       = require('gl-mat4/lookAt')
+var cross        = require('gl-vec3/cross')
+var normalize3   = require('gl-vec3/normalize')
+var dot3         = require('gl-vec3/dot')
+
+function len3(x, y, z) {
+  return Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2))
+}
 
 function findOrthoPair(v) {
   var vx = Math.abs(v[0])
@@ -32,12 +39,14 @@ function findOrthoPair(v) {
   return u
 }
 
-function TurntableController(center, up, radius, theta, phi) {
+function TurntableController(zoomMin, zoomMax, center, up, right, radius, theta, phi) {
   this.center = filterVector(center)
   this.up     = filterVector(up)
-  this.right  = filterVector(findOrthoPair(up))
+  this.right  = filterVector(right)
   this.radius = filterVector([radius])
   this.angle  = filterVector([theta, phi])
+  this.angle.bounds = [[-Infinity,-Math.PI/2], [Infinity,Math.PI/2]]
+  this.setZoomBounds(zoomMin, zoomMax)
 
   this.computedCenter = this.center.curve(0)
   this.computedUp     = this.up.curve(0)
@@ -51,11 +60,10 @@ function TurntableController(center, up, radius, theta, phi) {
   for(var i=0; i<16; ++i) {
     this.computedMatrix[i] = 0.0
   }
-
   this._isDirty       = true
-  this._lastTick      = -Infinity
+  this._lastTick      = 0
 
-  this.recalcMatrix()
+  this._recalcMatrix(0)
 }
 
 var proto = TurntableController.prototype
@@ -65,14 +73,30 @@ proto.dirty = function() {
 }
 
 proto.get = function(result) {
+  this._isDirty = false
+  if(!result) {
+    return this.computedMatrix
+  }
   var m = this.computedMatrix
   for(var i=0; i<16; ++i) {
     result[i] = m[i]
   }
-  this._isDirty = false
+  return result
 }
 
-proto._recalcMatrix = function() {
+proto.setZoomBounds = function(minDist, maxDist) {
+  minDist = minDist || 0.0
+  maxDist = maxDist || Infinity
+  this._isDirty = true
+}
+
+proto._recalcMatrix = function(t) {
+  //Recompute relevant curves
+  this.center.curve(t)
+  this.up.curve(t)
+  this.right.curve(t)
+  this.radius.curve(t)
+  this.angle.curve(t)
 
   //Compute frame for camera matrix
   var up     = this.computedUp
@@ -94,6 +118,8 @@ proto._recalcMatrix = function() {
   for(var i=0; i<3; ++i) {
     right[i] /= rl
   }
+
+  //Compute toward vector
   var toward = this.computedToward
   cross(toward, up, right)
   normalize3(toward, toward)
@@ -131,46 +157,25 @@ proto.tick = function(t) {
   var t1 = Math.max(
     this.center.lastT(),
     this.up.lastT(),
+    this.right.lastT(),
     this.radius.lastT(),
     this.angle.lastT())
   if(t1 < t0 && 
     this.center.stable() &&
     this.up.stable() &&
+    this.right.stable() &&
     this.radius.stable() &&
     this.angle.stable()) {
     return
   }
-  this.center.curve(t)
-  this.up.curve(t)
-  this.radius.curve(t)
-  this.angle.curve(t)
-  this._recalcMatrix()
+  this._recalcMatrix(t)
   this._lastTick = t
   this._isDirty = true
 }
 
-proto.flush = function(t) {
-  this.center.flush(t)
-  this.up.flush(t)
-  this.radius.flush(t)
-  this.angle.flush(t)
-}
-
-proto.zoom = function(t, dr) {
-  this.radius.move(t, dr)
-}
-
-proto.translate = function(t, dx, dy, dz) {
-  this.center.move(t, dx, dy, dz)
-}
-
 proto.rotate = function(t, dtheta, dphi) {
-  this.angle.move(t, dtheta, dphi)
-
-  //hack:  clamp phi to range [-pi/2, pi/2]
-  var state = this.angle._state
-  var n     = state.length - 2
-  state[n] = Math.max(Math.min(state[n], Math.PI/2), Math.PI/2)
+  var radius = Math.exp(this.computedRadius[0])
+  this.angle.move(t, dtheta / radius, dphi / radius)
 }
 
 proto.pan = function(t, dx, dy) {
@@ -181,13 +186,168 @@ proto.pan = function(t, dx, dy) {
   this.center.move(t, vx, vy, vz)
 }
 
+//Recenters the 
+proto.tare = function(t) {
+  //Recompute state for new t value
+  var prevT = this._lastTick
+  this._recalcMatrix(t)
+
+  var mat = this.computedMatrix
+
+  var ux = mat[0]
+  var uy = mat[1]
+  var uz = mat[2]
+  var ul = len3(ux, uy, uz)
+  ux /= ul
+  uy /= ul
+  uz /= ul
+
+  var rx = mat[4]
+  var ry = mat[5]
+  var rz = mat[6]
+  var rl = len3(rx, ry, rz)
+  rx /= rl
+  ry /= rl
+  rz /= rl
+
+  this.up.jump(t, ux, uy, uz)
+  this.right.jump(t, rx, ry, rz)
+  this.angle.jump(t, 0, 0)
+
+  //Reset state of coordinates
+  this._recalcMatrix(prevT)
+}
+
+proto.idle = function(t) {
+  this.center.idle(t)
+  this.up.idle(t)
+  this.right.idle(t)
+  this.radius.idle(t)
+  this.angle.idle(t)
+}
+
+proto.flush = function(t) {
+  this.center.flush(t)
+  this.up.flush(t)
+  this.right.flush(t)
+  this.radius.flush(t)
+  this.angle.flush(t)
+}
+
+proto.lookAt = function(t, center, up, eye) {
+  center = center || this.computedCenter
+  up     = up     || this.computedUp
+  eye    = eye    || this.computedEye
+
+  var ux = up[0]
+  var uy = up[1]
+  var uz = up[2]
+  var ul = len3(ux, uy, uz)
+  if(ul < 1e-6) {
+    return
+  }
+  ux /= ul
+  uy /= ul
+  uz /= ul
+
+  var tx = eye[0] - center[0]
+  var ty = eye[1] - center[1]
+  var tz = eye[2] - center[2]
+  var tl = len3(tx, ty, tz)
+  if(tl < 1e-6) {
+    return
+  }
+  tx /= tl
+  ty /= tl
+  tz /= tl
+
+  var right = this.computedRight
+  var rx = right[0]
+  var ry = right[1]
+  var rz = right[2]
+  var ru = ux*rx + uy*ry + uz*rz
+  rx -= ru * ux
+  ry -= ru * uy
+  rz -= ru * uz
+  var rl = len3(rx, ry, rz)
+
+  if(rl > 1e-6) {
+    rx = uy * tz - uz * ty
+    ry = uz * tx - ux * tz
+    rz = ux * ty - uy * tx
+    rl = len3(rx, ry, rz)
+    if(rl < 1e-6) {
+      return
+    }
+  }
+  rx /= rl
+  ry /= rl
+  rz /= rl
+
+  this.up.set(t, ux, uy, uz)
+  this.right.set(t, rx, ry, rz)
+  this.center.set(t, center[0], center[1], center[2])
+
+  var tu = ux*tx + uy*ty + uz*tz
+  var ru = rx*tx + ry*ty + rz*tz
+
+  var phi = Math.acos(tu)
+  var theta = Math.acos(ru)
+
+  this.radius.set(t, Math.log(tl))
+  this.angle.set(t, theta, phi) //TODO: Prevent coordinate wrap around here
+}
+
 function createTurntableController(options) {
   options = options || {}
+  var center = options.center || [0,0,0]
+  var up     = options.up     || [0,1,0]
+  var right  = options.right  || findOrthoPair(up)
+  var radius = options.radius || 1.0
+  var theta  = options.theta  || 0.0
+  var phi    = options.phi    || 0.0
+
+  center = [].slice.call(center, 0, 3)
+
+  up = [].slice.call(up, 0, 3)
+  normalize3(up, up)
+
+  right = [].slice.call(right, 0, 3)
+  normalize3(right, right)
+
+  if('eye' in options) {
+    var eye = options.eye
+    var toward = [
+      eye[0]-center[0],
+      eye[1]-center[1],
+      eye[2]-center[2]
+    ]
+    cross(right, toward, up)
+    if(len3(right[0], right[1], right[2]) < 1e-6) {
+      right = findOrthoPair(up)
+    } else {
+      normalize3(right, right)
+    }
+
+    radius = len3(toward[0], toward[1], toward[2])
+
+    var ut = dot3(up, toward) / radius
+    var rt = dot3(right, toward) / radius
+    phi   = Math.acos(ut)
+    theta = Math.acos(rt)
+  }
+
+  //Use logarithmic coordinates for radius
+  radius = Math.log(radius)
+
+  //Return the controller
   return new TurntableController(
-    options.center || [0,0,0],
-    options.up     || [0,1,0],
-    options.right  || [1,0,0],
-    options.radius || 1.0,
-    options.theta  || 0.0,
-    options.phi    || 0.0)
+    options.zoomMin,
+    options.zoomMax,
+    center,
+    up,
+    right,
+    radius,
+    theta,
+    phi)
 }
