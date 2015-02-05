@@ -88,7 +88,7 @@ canvas.addEventListener('mousemove', function(ev) {
 })
 
 canvas.addEventListener('wheel', function(e) {
-  camera.zoom(now(), e.deltaY)
+  camera.zoom(now(), 0.001 * e.deltaY)
 })
 
 tareButton.addEventListener('click', function() {
