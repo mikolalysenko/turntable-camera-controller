@@ -29,18 +29,6 @@ Creates a new turntable controller with the given input parameters.
 
 **Returns** A new camera controller
 
-## Properties
-
-#### `controller.center`
-
-#### `controller.up`
-
-#### `controller.right`
-
-#### `controller.radius`
-
-#### `controller.angle`
-
 
 ## 3d-camera-core interface
 

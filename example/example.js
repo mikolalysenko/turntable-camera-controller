@@ -15,6 +15,24 @@ document.body.appendChild(canvas)
 window.addEventListener('resize', fit(canvas), false)
 var gl = createContext(canvas, {}, render)
 
+var controlDiv = document.createElement('div')
+controlDiv.style.position = 'absolute'
+controlDiv.style['z-index'] = 10
+controlDiv.style.left = '10px'
+controlDiv.style.top = '10px'
+document.body.appendChild(controlDiv)
+
+var tareButton = document.createElement('input')
+tareButton.type = 'submit'
+tareButton.value = 'Tare YX'
+controlDiv.appendChild(tareButton)
+
+var lookAtButton = document.createElement('input')
+lookAtButton.type = 'submit'
+lookAtButton.value = 'Reset'
+controlDiv.appendChild(lookAtButton)
+
+
 //Create objects for rendering
 var bounds = [[-10,-10,-10], [10,10,10]]
 var mesh = createMesh(gl, {
@@ -38,16 +56,43 @@ var camera = createCamera({
     0.5*(bounds[0][2]+bounds[1][2]) ]
 })
 
+//Hook event listeners
 var lastX = 0, lastY = 0
+
+document.oncontextmenu = function(e) { 
+  e.preventDefault()
+  e.stopPropagation()
+  return false 
+}
+
 canvas.addEventListener('mousemove', function(ev) {
-  if(ev.which) {
+
+  var dx = (ev.x - lastX) / gl.drawingBufferWidth
+  var dy = (ev.y - lastY) / gl.drawingBufferHeight
+
+  if(ev.which === 1) {
     camera.rotate(now(), 
-      -150 * (ev.x - lastX) / gl.drawingBufferWidth, 
-      150 * (ev.y - lastY) / gl.drawingBufferHeight)
+      -150 * dx, 
+       150 * dy)
+  }
+  if(ev.which === 3) {
+    camera.pan(now(), -dx, dy)
   }
   lastX = ev.x
   lastY = ev.y
-  console.log(ev)
+})
+
+tareButton.addEventListener('click', function() {
+  camera.tare(now())
+})
+
+lookAtButton.addEventListener('click', function() {
+  camera.lookAt(now(),
+    [ 0, 0, -50 ],
+    [ 0.5*(bounds[0][0]+bounds[1][0]),
+      0.5*(bounds[0][1]+bounds[1][1]),
+      0.5*(bounds[0][2]+bounds[1][2]) ],
+    [ 0, 1, 0 ])
 })
 
 //Redraw frame

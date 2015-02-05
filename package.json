@@ -8,10 +8,10 @@
   },
   "dependencies": {
     "filtered-vector": "^1.2.0",
-    "gl-mat4": "^1.0.2",
     "gl-vec3": "^1.0.2"
   },
   "devDependencies": {
+    "gl-mat4": "^1.0.2",
     "bunny": "^1.0.1",
     "canvas-fit": "^1.2.0",
     "gl-axes": "^6.0.2",
