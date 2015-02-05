@@ -7,8 +7,8 @@
     "test": "test"
   },
   "dependencies": {
-    "filtered-vector": "^1.2.0",
     "gl-mat4": "^1.0.2",
+    "filtered-vector": "^1.2.0",
     "gl-vec3": "^1.0.2"
   },
   "devDependencies": {
