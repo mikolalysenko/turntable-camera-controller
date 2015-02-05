@@ -12,6 +12,10 @@ function len3(x, y, z) {
   return Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2))
 }
 
+function clamp1(x) {
+  return Math.min(1.0, Math.max(-1.0, x))
+}
+
 function findOrthoPair(v) {
   var vx = Math.abs(v[0])
   var vy = Math.abs(v[1])
@@ -280,9 +284,23 @@ proto.tare = function(t, axes) {
     return
   }
 
-  axes = axes || 'xy'
-  var vshift = axes.charCodeAt(0) - 120
-  var ushift = axes.charCodeAt(1) - 120
+  //Get the axes for tare
+  var ushift, vshift
+  if(typeof axes === 'number') {
+    ushift = (axes)|0
+    vshift = (ushift + 1) % 3
+  } else if(typeof axes === 'string') {
+    var laxes = axes.toUpperCase()
+    ushift = laxes.charCodeAt(0) - 88
+    if(axes.length === 2) {
+      vshift = laxes.charCodeAt(1) - 88
+    } else {
+      vshift = (ushift + 1) % 3
+    }
+  } else {
+    ushift = 1
+    vshift = 0
+  }
   if(ushift === vshift || 
     ushift < 0 || ushift >= 3 ||
     vshift < 0 || vshift >= 3) {
@@ -292,6 +310,7 @@ proto.tare = function(t, axes) {
   //Recompute state for new t value
   this._recalcMatrix(t)
 
+  //Read out matrix components
   var mat = this.computedMatrix
 
   //Get right and up vectors
@@ -332,9 +351,7 @@ proto.tare = function(t, axes) {
   this.up.jump(t, ux, uy, uz)
   this.right.jump(t, rx, ry, rz)
 
-  var phi   = Math.asin(eu)
-  var theta = Math.atan2(ef, er)
-
+  var phi, theta
   if(ushift === 2) {
     var cx = mat[1]
     var cy = mat[5]
@@ -343,9 +360,17 @@ proto.tare = function(t, axes) {
     var cf =-(cx * (uy * rz - uz * ry) +
               cy * (uz * rx - ux * rz) +
               cz * (ux * ry - uy * rx))
-
+    if(eu < 0) {
+      phi = -Math.PI/2
+    } else {
+      phi = Math.PI/2
+    }
     theta = Math.atan2(cf, cr)
+  } else {
+    phi = Math.asin(clamp1(eu))
+    theta = Math.atan2(ef, er)
   }
+
   this.angle.jump(t, theta, phi)
 
   //Reset state of coordinates
@@ -440,7 +465,7 @@ proto.lookAt = function(t, eye, center, up) {
   var tr = rx*tx + ry*ty + rz*tz
   var tf = fx*tx + fy*ty + fz*tz
 
-  var phi   = Math.asin(tu)
+  var phi   = Math.asin(clamp1(tu))
   var theta = Math.atan2(tf, tr)
 
   var angleState = this.angle._state

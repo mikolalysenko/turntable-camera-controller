@@ -22,6 +22,13 @@ controlDiv.style.left = '10px'
 controlDiv.style.top = '10px'
 document.body.appendChild(controlDiv)
 
+var delayControl = document.createElement('input')
+delayControl.type = 'range'
+delayControl.min = 0
+delayControl.max = 200
+delayControl.value = 30
+controlDiv.appendChild(delayControl)
+
 var tareButton = document.createElement('input')
 tareButton.type = 'submit'
 tareButton.value = 'Roll'
@@ -85,7 +92,7 @@ canvas.addEventListener('wheel', function(e) {
 })
 
 tareButton.addEventListener('click', function() {
-  camera.tare(now(), 'xz')
+  camera.tare(now(), 2)
 })
 
 lookAtButton.addEventListener('click', function() {
@@ -101,11 +108,10 @@ lookAtButton.addEventListener('click', function() {
 function render() {
   //Update camera parameters
   var t = now()
-  var delay = 30
+  var delay = +delayControl.value
   camera.idle(t - delay)
   camera.tick(t - 2 * delay)
-  camera.flush(t - 10 * delay)
-
+  
   //Compute parameters
   var cameraParams = {
     view: camera.get(),
