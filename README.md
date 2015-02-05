@@ -21,14 +21,14 @@ npm i turntable-camera-controller
 Creates a new turntable controller with the given input parameters.
 
 * `options.center` the center of the camera
-* `options.up` the up vector of the camera
-* `options.right` the right vector the camera
-* `options.radius` the distance from the camera to the objective
-* `options.theta` the longitudinal angle of the camera
+* `options.eye` the location of the eye (optional)
+* `options.up` the up vector of the camera (default [0,1,0])
+* `options.right` the right vector the camera (default [1,0,0])
+* `options.radius` the distance from the camera to the objective (default 1)
+* `options.theta` the longitudinal angle of the camera (default
 * `options.phi` the latitudinal angle of the camera
 
 **Returns** A new camera controller
-
 
 ## 3d-camera-core interface
 

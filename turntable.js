@@ -56,13 +56,12 @@ function TurntableController(zoomMin, zoomMax, center, up, right, radius, theta,
   this.computedToward = [0,0,0]
   this.computedEye    = [0,0,0]
   this.computedMatrix = new Array(16)
-
   for(var i=0; i<16; ++i) {
-    this.computedMatrix[i] = 0.0
+    this.computedMatrix[i] = 0.5
   }
+
   this._isDirty       = true
   this._lastTick      = 0
-
   this._recalcMatrix(0)
 }
 
@@ -239,9 +238,7 @@ proto.rotate = function(t, dtheta, dphi) {
 }
 
 proto.zoom = function(t, dz) {
-  if(dz) {
-    this.radius.move(t, 0.001 * dz)
-  }
+  this.radius.move(t, dz)
 }
 
 proto.pan = function(t, dx, dy) {
@@ -292,8 +289,6 @@ proto.tare = function(t, axes) {
     return
   }
 
-  console.log(t, this.computedMatrix.join(), this.computedUp.join(), this.computedRight.join(), this.computedAngle.join())
-
   //Recompute state for new t value
   this._recalcMatrix(t)
 
@@ -325,30 +320,36 @@ proto.tare = function(t, axes) {
   var tx = eye[0] - center[0]
   var ty = eye[1] - center[1]
   var tz = eye[2] - center[2]
-  var triple =  tx * (uy * rz - uz * ry) +
-                ty * (uz * rx - ux * rz) +
-                tz * (ux * ry - uy * rx)
+  var tl = len3(tx, ty, tz)
+  var eu = (tx * ux + ty * uy + tz * uz) / tl
+  var er = (tx * rx + ty * ry + tz * rz) / tl
+  var ef = (tx * (uy * rz - uz * ry) +
+            ty * (uz * rx - ux * rz) +
+            tz * (ux * ry - uy * rx)) / tl
 
   this.radius.idle(t)
   this.center.idle(t)
   this.up.jump(t, ux, uy, uz)
   this.right.jump(t, rx, ry, rz)
-  if(triple < 0) {
-    this.angle.jump(t, -Math.PI/2, 0)
-  } else {
-    this.angle.jump(t, Math.PI/2, 0)
+
+  var phi   = Math.asin(eu)
+  var theta = Math.atan2(ef, er)
+
+  if(ushift === 2) {
+    var cx = mat[1]
+    var cy = mat[5]
+    var cz = mat[9]
+    var cr = (cx * rx + cy * ry + cz * rz)
+    var cf =-(cx * (uy * rz - uz * ry) +
+              cy * (uz * rx - ux * rz) +
+              cz * (ux * ry - uy * rx))
+
+    theta = Math.atan2(cf, cr)
   }
+  this.angle.jump(t, theta, phi)
 
   //Reset state of coordinates
   this._recalcMatrix(this._lastTick)
-
-  this._recalcMatrix(0.5 * (t + this._lastTick))
-
-  console.log(t, this.computedMatrix.join(), this.computedUp.join(), this.computedRight.join(), this.computedAngle.join())
-
-  this._recalcMatrix(t)
-
-  console.log(t, this.computedMatrix.join(), this.computedUp.join(), this.computedRight.join(), this.computedAngle.join())
 }
 
 proto.idle = function(t) {

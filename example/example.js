@@ -24,7 +24,7 @@ document.body.appendChild(controlDiv)
 
 var tareButton = document.createElement('input')
 tareButton.type = 'submit'
-tareButton.value = 'Tare YX'
+tareButton.value = 'Roll'
 controlDiv.appendChild(tareButton)
 
 var lookAtButton = document.createElement('input')
@@ -85,7 +85,7 @@ canvas.addEventListener('wheel', function(e) {
 })
 
 tareButton.addEventListener('click', function() {
-  camera.tare(now())
+  camera.tare(now(), 'xz')
 })
 
 lookAtButton.addEventListener('click', function() {
