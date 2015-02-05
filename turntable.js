@@ -3,6 +3,7 @@
 module.exports = createTurntableController
 
 var filterVector = require('filtered-vector')
+var invert44     = require('gl-mat4/invert')
 var cross        = require('gl-vec3/cross')
 var normalize3   = require('gl-vec3/normalize')
 var dot3         = require('gl-vec3/dot')
@@ -90,7 +91,7 @@ proto.setZoomBounds = function(minDist, maxDist) {
 }
 
 proto._recalcMatrix = function(t) {
-  //Recompute relevant curves
+  //Recompute curves
   this.center.curve(t)
   this.up.curve(t)
   this.right.curve(t)
@@ -189,15 +190,17 @@ proto.tick = function(t) {
 var SCRATCH0 = [0.1,0.1,0.1]
 var SCRATCH1 = SCRATCH0.slice()
 var SCRATCH2 = SCRATCH0.slice()
+var SCRATCH_M = [0.1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 
 proto.setMatrix = function(t, matrix) {
   if(t < this._lastTick) {
     return
   }
 
-  var ex = mat[12]
-  var ey = mat[13]
-  var ez = mat[14]
+  invert44(SCRATCH_M, matrix)
+  var ex = SCRATCH_M[12]
+  var ey = SCRATCH_M[13]
+  var ez = SCRATCH_M[14]
 
   var dx = mat[2]
   var dy = mat[6]
@@ -208,7 +211,7 @@ proto.setMatrix = function(t, matrix) {
   dz /= dl
 
   this.radius.curve(t)
-  var r = Math.exp(this.computedRadius[0])
+  var r  = Math.exp(this.computedRadius[0])
   var cx = ex + r * dx
   var cy = ey + r * dy
   var cz = ez + r * dz
@@ -233,14 +236,15 @@ proto.rotate = function(t, dtheta, dphi) {
   var radius = Math.exp(this.computedRadius[0])
   this.radius.curve(this._lastTick)
   this.angle.move(t, dtheta / radius, dphi / radius)
+}
 
-  console.log('here')
+proto.zoom = function(t, dz) {
+  if(dz) {
+    this.radius.move(t, 0.001 * dz)
+  }
 }
 
 proto.pan = function(t, dx, dy) {
-
-  console.log('here')
-
   this._recalcMatrix(t)
   var mat = this.computedMatrix
   var rad = Math.exp(this.computedRadius[0])
@@ -288,6 +292,8 @@ proto.tare = function(t, axes) {
     return
   }
 
+  console.log(t, this.computedMatrix.join(), this.computedUp.join(), this.computedRight.join(), this.computedAngle.join())
+
   //Recompute state for new t value
   this._recalcMatrix(t)
 
@@ -323,6 +329,8 @@ proto.tare = function(t, axes) {
                 ty * (uz * rx - ux * rz) +
                 tz * (ux * ry - uy * rx)
 
+  this.radius.idle(t)
+  this.center.idle(t)
   this.up.jump(t, ux, uy, uz)
   this.right.jump(t, rx, ry, rz)
   if(triple < 0) {
@@ -333,6 +341,14 @@ proto.tare = function(t, axes) {
 
   //Reset state of coordinates
   this._recalcMatrix(this._lastTick)
+
+  this._recalcMatrix(0.5 * (t + this._lastTick))
+
+  console.log(t, this.computedMatrix.join(), this.computedUp.join(), this.computedRight.join(), this.computedAngle.join())
+
+  this._recalcMatrix(t)
+
+  console.log(t, this.computedMatrix.join(), this.computedUp.join(), this.computedRight.join(), this.computedAngle.join())
 }
 
 proto.idle = function(t) {
@@ -361,8 +377,6 @@ proto.lookAt = function(t, eye, center, up) {
   center = center || this.computedCenter
   up     = up     || this.computedUp
   
-  console.log(eye, center, up)
-
   var ux = up[0]
   var uy = up[1]
   var uz = up[2]
@@ -411,6 +425,7 @@ proto.lookAt = function(t, eye, center, up) {
   this.up.set(t, ux, uy, uz)
   this.right.set(t, rx, ry, rz)
   this.center.set(t, center[0], center[1], center[2])
+  this.radius.set(t, Math.log(tl))
 
   var fx = uy * rz - uz * ry
   var fy = uz * rx - ux * rz
@@ -424,15 +439,13 @@ proto.lookAt = function(t, eye, center, up) {
   var tr = rx*tx + ry*ty + rz*tz
   var tf = fx*tx + fy*ty + fz*tz
 
-  console.log(tu, tr, tf)
-
   var phi   = Math.asin(tu)
   var theta = Math.atan2(tf, tr)
 
   var angleState = this.angle._state
-  var lastTheta = angleState[angleState.length-1]
-  var lastPhi = angleState[angleState.length-2]
-  lastTheta = lastTheta % (2.0 * Math.PI)
+  var lastTheta  = angleState[angleState.length-1]
+  var lastPhi    = angleState[angleState.length-2]
+  lastTheta      = lastTheta % (2.0 * Math.PI)
   var dp = Math.abs(lastTheta + 2.0 * Math.PI - theta)
   var d0 = Math.abs(lastTheta - theta)
   var dn = Math.abs(lastTheta - 2.0 * Math.PI - theta)
@@ -451,6 +464,7 @@ proto.lookAt = function(t, eye, center, up) {
 
 function createTurntableController(options) {
   options = options || {}
+
   var center = options.center || [0,0,0]
   var up     = options.up     || [0,1,0]
   var right  = options.right  || findOrthoPair(up)
@@ -484,8 +498,8 @@ function createTurntableController(options) {
 
     var ut = dot3(up, toward) / radius
     var rt = dot3(right, toward) / radius
-    phi   = Math.acos(ut)
-    theta = Math.acos(rt)
+    phi    = Math.acos(ut)
+    theta  = Math.acos(rt)
   }
 
   //Use logarithmic coordinates for radius

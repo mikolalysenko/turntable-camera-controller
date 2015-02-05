@@ -39,11 +39,13 @@ Creates a new turntable controller with the given input parameters.
 
 ## Interaction
 
-#### `controller.pan(t, x, y)`
+#### `controller.zoom(t, dr)`
 
-#### `controller.zoom(t, r)`
+#### `controller.pan(t, dx, dy)`
 
 #### `controller.rotate(t, dx, dy)`
+
+
 
 #### `controller.setEye(t, x, y, z)`
 

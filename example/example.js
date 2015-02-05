@@ -66,10 +66,8 @@ document.oncontextmenu = function(e) {
 }
 
 canvas.addEventListener('mousemove', function(ev) {
-
-  var dx = (ev.x - lastX) / gl.drawingBufferWidth
-  var dy = (ev.y - lastY) / gl.drawingBufferHeight
-
+  var dx = (ev.clientX - lastX) / gl.drawingBufferWidth
+  var dy = (ev.clientY - lastY) / gl.drawingBufferHeight
   if(ev.which === 1) {
     camera.rotate(now(), 
       -150 * dx, 
@@ -78,8 +76,12 @@ canvas.addEventListener('mousemove', function(ev) {
   if(ev.which === 3) {
     camera.pan(now(), -dx, dy)
   }
-  lastX = ev.x
-  lastY = ev.y
+  lastX = ev.clientX
+  lastY = ev.clientY
+})
+
+canvas.addEventListener('wheel', function(e) {
+  camera.zoom(now(), e.deltaY)
 })
 
 tareButton.addEventListener('click', function() {
