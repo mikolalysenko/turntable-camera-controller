@@ -64,36 +64,17 @@ function TurntableController(zoomMin, zoomMax, center, up, right, radius, theta,
     this.computedMatrix[i] = 0.5
   }
 
-  this._isDirty       = true
-  this._lastTick      = 0
-  this._recalcMatrix(0)
+  this.recalcMatrix(0)
 }
 
 var proto = TurntableController.prototype
 
-proto.dirty = function() {
-  return this._isDirty
-}
-
-proto.get = function(result) {
-  this._isDirty = false
-  if(!result) {
-    return this.computedMatrix
-  }
-  var m = this.computedMatrix
-  for(var i=0; i<16; ++i) {
-    result[i] = m[i]
-  }
-  return result
-}
-
 proto.setZoomBounds = function(minDist, maxDist) {
   minDist = minDist || 0.0
   maxDist = maxDist || Infinity
-  this._isDirty = true
 }
 
-proto._recalcMatrix = function(t) {
+proto.recalcMatrix = function(t) {
   //Recompute curves
   this.center.curve(t)
   this.up.curve(t)
@@ -151,7 +132,7 @@ proto._recalcMatrix = function(t) {
   var mat = this.computedMatrix
   for(var i=0; i<3; ++i) {
     var x      = wx * right[i] + wy * toward[i] + wz * up[i]
-    eye[i]     = center[i] + radius * x
+    eye[i]     = center[i] - radius * x
     mat[4*i+1] = sx * right[i] + sy * toward[i] + sz * up[i]
     mat[4*i+2] = x
     mat[4*i+3] = 0.0
@@ -179,76 +160,38 @@ proto._recalcMatrix = function(t) {
     for(var j=0; j<3; ++j) {
       rr += mat[i+4*j] * eye[j]
     }
-    mat[12+i] = -rr
+    mat[12+i] = rr
   }
   mat[15] = 1.0
 }
 
-proto.tick = function(t) {
-  this._recalcMatrix(t)
-  this._lastTick = t
-  this._isDirty = true
-}
-
-var SCRATCH0 = [0.1,0.1,0.1]
-var SCRATCH1 = SCRATCH0.slice()
-var SCRATCH2 = SCRATCH0.slice()
-var SCRATCH_M = [0.1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-
-proto.setMatrix = function(t, matrix) {
-  if(t < this._lastTick) {
-    return
+proto.getMatrix = function(t, result) {
+  this.recalcMatrix(t)
+  var mat = this.computedMatrix
+  if(result) {
+    for(var i=0; i<16; ++i) {
+      result[i] = mat[i]
+    }
+    return result
   }
-
-  invert44(SCRATCH_M, matrix)
-  var ex = SCRATCH_M[12]
-  var ey = SCRATCH_M[13]
-  var ez = SCRATCH_M[14]
-
-  var dx = mat[2]
-  var dy = mat[6]
-  var dz = mat[10]
-  var dl = len3(dx, dy, dz)
-  dx /= dl
-  dy /= dl
-  dz /= dl
-
-  this.radius.curve(t)
-  var r  = Math.exp(this.computedRadius[0])
-  var cx = ex + r * dx
-  var cy = ey + r * dy
-  var cz = ez + r * dz
-
-  SCRATCH0[0] = cx
-  SCRATCH0[1] = cy
-  SCRATCH0[2] = cx
-
-  SCRATCH1[0] = ex
-  SCRATCH1[1] = ey
-  SCRATCH1[2] = ez
-
-  SCRATCH2[0] = mat[1]
-  SCRATCH2[1] = mat[5]
-  SCRATCH2[2] = mat[9]
-
-  this.lookAt(t, SCRATCH0, SCRATCH1, SCRATCH2)
+  return mat
 }
 
-proto.rotate = function(t, dtheta, dphi) {
-  this.radius.curve(t)
-  var radius = Math.exp(this.computedRadius[0])
-  this.radius.curve(this._lastTick)
-  this.angle.move(t, dtheta / radius, dphi / radius)
+proto.rotate = function(t, dtheta, dphi, droll) {
+  this.angle.move(t, dtheta, dphi)
 }
 
 proto.zoom = function(t, dz) {
   this.radius.move(t, dz)
 }
 
-proto.pan = function(t, dx, dy) {
-  this._recalcMatrix(t)
+proto.pan = function(t, dx, dy, dz) {
+  dx = dx || 0.0
+  dy = dy || 0.0
+  dz = dz || 0.0
+
+  this.recalcMatrix(t)
   var mat = this.computedMatrix
-  var rad = Math.exp(this.computedRadius[0])
 
   var ux = mat[1]
   var uy = mat[5]
@@ -270,57 +213,72 @@ proto.pan = function(t, dx, dy) {
   ry /= rl
   rz /= rl
 
-  var vx = rx * dx + ux * dy
-  var vy = ry * dx + uy * dy
-  var vz = rz * dx + uz * dy
-  this.center.move(t, rad * vx, rad * vy, rad * vz)
+  var fx = mat[2]
+  var fy = mat[6]
+  var fz = mat[10]
+  var fu = fx * ux + fy * uy + fz * uz
+  var fr = fx * rx + fy * ry + fz * rz
+  fx -= fu * ux + fr * rx
+  fy -= fu * uy + fr * ry
+  fz -= fu * uz + fr * rz
+  var fl = len3(fx, fy, fz)
+  fx /= fl
+  fy /= fl
+  fz /= fl
 
-  this._recalcMatrix(this._lastTick)
+  var vx = rx * dx + ux * dy + fx * dz
+  var vy = ry * dx + uy * dy + fy * dz
+  var vz = rz * dx + uz * dy + fz * dz
+  this.center.move(t, vx, vy, vz)
 }
 
 //Recenters the coordinate axes
-proto.tare = function(t, axes) {
-  if(t < this._lastTick) {
-    return
-  }
-
+proto.setMatrix = function(t, mat, axes, noSnap) {
+  
   //Get the axes for tare
-  var ushift, vshift
+  var ushift = 1
   if(typeof axes === 'number') {
     ushift = (axes)|0
-    vshift = (ushift + 1) % 3
-  } else if(typeof axes === 'string') {
-    var laxes = axes.toUpperCase()
-    ushift = laxes.charCodeAt(0) - 88
-    if(axes.length === 2) {
-      vshift = laxes.charCodeAt(1) - 88
-    } else {
-      vshift = (ushift + 1) % 3
-    }
-  } else {
+  } 
+  if(ushift < 0 || ushift > 3) {
     ushift = 1
-    vshift = 0
   }
-  if(ushift === vshift || 
-    ushift < 0 || ushift >= 3 ||
-    vshift < 0 || vshift >= 3) {
-    return
-  }
+  var vshift = (ushift + 2) % 3
+  var fshift = (ushift + 1) % 3
+
+  console.log(mat.join())
 
   //Recompute state for new t value
-  this._recalcMatrix(t)
-
-  //Read out matrix components
-  var mat = this.computedMatrix
+  if(!mat) { 
+    this.recalcMatrix(t)
+    mat = this.computedMatrix
+  }
 
   //Get right and up vectors
   var ux = mat[ushift]
   var uy = mat[ushift+4]
   var uz = mat[ushift+8]
-  var ul = len3(ux, uy, uz)
-  ux /= ul
-  uy /= ul
-  uz /= ul
+  if(!noSnap) {
+    var ul = len3(ux, uy, uz)
+    ux /= ul
+    uy /= ul
+    uz /= ul
+  } else {
+    var ax = Math.abs(ux)
+    var ay = Math.abs(uy)
+    var az = Math.abs(uz)
+    var am = Math.max(ax,ay,az)
+    if(ax === am) {
+      ux = (ux < 0) ? -1 : 1
+      uy = uz = 0
+    } else if(az === am) {
+      uz = (uz < 0) ? -1 : 1
+      ux = uy = 0
+    } else {
+      uy = (uy < 0) ? -1 : 1
+      ux = uz = 0
+    }
+  }
 
   var rx = mat[vshift]
   var ry = mat[vshift+4]
@@ -333,21 +291,30 @@ proto.tare = function(t, axes) {
   rx /= rl
   ry /= rl
   rz /= rl
+  
+  var fx = uy * rz - uz * ry
+  var fy = uz * rx - ux * rz
+  var fz = ux * ry - uy * rx
+  var fl = len3(fx, fy, fz)
+  fx /= fl
+  fy /= fl
+  fz /= fl
 
-  var eye    = this.computedEye
-  var center = this.computedCenter
-  var tx = eye[0] - center[0]
-  var ty = eye[1] - center[1]
-  var tz = eye[2] - center[2]
-  var tl = len3(tx, ty, tz)
-  var eu = (tx * ux + ty * uy + tz * uz) / tl
-  var er = (tx * rx + ty * ry + tz * rz) / tl
-  var ef = (tx * (uy * rz - uz * ry) +
-            ty * (uz * rx - ux * rz) +
-            tz * (ux * ry - uy * rx)) / tl
+  var imat = this.computedMatrix
+  invert44(imat, mat)
+  var w  = imat[15]
+  var ex = imat[12] / w
+  var ey = imat[13] / w
+  var ez = imat[14] / w
+
+  var gx = mat[2]
+  var gy = mat[6]
+  var gz = mat[10]
+  var gs = Math.exp(this.radius.curve(t)[0]) / len3(gx, gy, gz)
+
+  this.center.jump(t, ex-gx*gs, ey-gy*gs, ez-gz*gs)
 
   this.radius.idle(t)
-  this.center.idle(t)
   this.up.jump(t, ux, uy, uz)
   this.right.jump(t, rx, ry, rz)
 
@@ -356,25 +323,36 @@ proto.tare = function(t, axes) {
     var cx = mat[1]
     var cy = mat[5]
     var cz = mat[9]
-    var cr = (cx * rx + cy * ry + cz * rz)
-    var cf =-(cx * (uy * rz - uz * ry) +
-              cy * (uz * rx - ux * rz) +
-              cz * (ux * ry - uy * rx))
-    if(eu < 0) {
+    var cr = cx * rx + cy * ry + cz * rz
+    var cf = cx * fx + cy * fy + cz * fz
+    if(tu < 0) {
       phi = -Math.PI/2
     } else {
       phi = Math.PI/2
     }
     theta = Math.atan2(cf, cr)
   } else {
-    phi = Math.asin(clamp1(eu))
-    theta = Math.atan2(ef, er)
+    var tx = mat[2]
+    var ty = mat[6]
+    var tz = mat[10]
+    var tu = tx * ux + ty * uy + tz * uz
+    var tr = tx * rx + ty * ry + tz * rz
+    var tf = tx * fx + ty * fy + tz * fz
+
+    phi = Math.asin(clamp1(tu))
+    theta = Math.atan2(tf, tr)
   }
 
   this.angle.jump(t, theta, phi)
+}
 
-  //Reset state of coordinates
-  this._recalcMatrix(this._lastTick)
+proto.lastT = function() {
+  return Math.max(
+    this.center.lastT(),
+    this.up.lastT(),
+    this.right.lastT(),
+    this.radius.lastT(),
+    this.angle.lastT())
 }
 
 proto.idle = function(t) {
@@ -394,10 +372,7 @@ proto.flush = function(t) {
 }
 
 proto.lookAt = function(t, eye, center, up) {
-  if(t < this._lastTick) {
-    return
-  }
-  this._recalcMatrix(t)
+  this.recalcMatrix(t)
 
   eye    = eye    || this.computedEye
   center = center || this.computedCenter
@@ -484,8 +459,6 @@ proto.lookAt = function(t, eye, center, up) {
 
   this.angle.jump(this.angle.lastT(), lastTheta, lastPhi)
   this.angle.set(t, theta, phi)
-
-  this._recalcMatrix(this._lastTick)
 }
 
 function createTurntableController(options) {

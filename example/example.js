@@ -39,7 +39,6 @@ lookAtButton.type = 'submit'
 lookAtButton.value = 'Reset'
 controlDiv.appendChild(lookAtButton)
 
-
 //Create objects for rendering
 var bounds = [[-10,-10,-10], [10,10,10]]
 var mesh = createMesh(gl, {
