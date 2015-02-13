@@ -246,8 +246,6 @@ proto.setMatrix = function(t, mat, axes, noSnap) {
   var vshift = (ushift + 2) % 3
   var fshift = (ushift + 1) % 3
 
-  console.log(mat.join())
-
   //Recompute state for new t value
   if(!mat) { 
     this.recalcMatrix(t)
@@ -300,20 +298,7 @@ proto.setMatrix = function(t, mat, axes, noSnap) {
   fy /= fl
   fz /= fl
 
-  var imat = this.computedMatrix
-  invert44(imat, mat)
-  var w  = imat[15]
-  var ex = imat[12] / w
-  var ey = imat[13] / w
-  var ez = imat[14] / w
-
-  var gx = mat[2]
-  var gy = mat[6]
-  var gz = mat[10]
-  var gs = Math.exp(this.radius.curve(t)[0]) / len3(gx, gy, gz)
-
-  this.center.jump(t, ex-gx*gs, ey-gy*gs, ez-gz*gs)
-
+  this.center.jump(t, ex, ey, ez)
   this.radius.idle(t)
   this.up.jump(t, ux, uy, uz)
   this.right.jump(t, rx, ry, rz)
@@ -344,6 +329,20 @@ proto.setMatrix = function(t, mat, axes, noSnap) {
   }
 
   this.angle.jump(t, theta, phi)
+
+  var imat = this.computedMatrix
+  invert44(imat, mat)
+  var w  = -imat[15]
+  var ex = imat[12] / w
+  var ey = imat[13] / w
+  var ez = imat[14] / w
+
+  var gs = Math.exp(this.radius.curve(t)[0])
+
+  var dx = mat[2]
+  var dy = mat[6]
+  var dz = mat[10]
+  this.center.jump(t, ex+dx*gs, ey+dy*gs, ez+dz*gs)
 }
 
 proto.lastT = function() {
@@ -371,13 +370,54 @@ proto.flush = function(t) {
   this.angle.flush(t)
 }
 
+
+proto.getUp = function(t, out) {
+  this.up.curve(t)
+  var up = this.computedUp
+  if(out) {
+    out[0] = up[0]
+    out[1] = up[1]
+    out[2] = up[2]
+    return out
+  }
+  return up
+}
+
+proto.getEye = function(t, out) {
+  this.recalcMatrix(t)
+  var eye = this.computedEye
+  if(out) {
+    out[0] = eye[0]
+    out[1] = eye[1]
+    out[2] = eye[2]
+    return out
+  }
+  return eye
+}
+
+proto.getCenter = function(t, out) {
+  this.recalcMatrix(t)
+  var center = this.computedCenter
+  if(out) {
+    out[0] = center[0]
+    out[1] = center[1]
+    out[2] = center[2]
+    return out
+  }
+  return center
+}
+
+proto.getZoom = function(t) {
+  return Math.exp(this.radius.curve(t)[0])
+}
+
 proto.lookAt = function(t, eye, center, up) {
   this.recalcMatrix(t)
 
   eye    = eye    || this.computedEye
   center = center || this.computedCenter
   up     = up     || this.computedUp
-  
+
   var ux = up[0]
   var uy = up[1]
   var uz = up[2]
