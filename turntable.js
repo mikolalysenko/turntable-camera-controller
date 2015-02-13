@@ -4,6 +4,7 @@ module.exports = createTurntableController
 
 var filterVector = require('filtered-vector')
 var invert44     = require('gl-mat4/invert')
+var rotateM      = require('gl-mat4/rotate')
 var cross        = require('gl-vec3/cross')
 var normalize3   = require('gl-vec3/normalize')
 var dot3         = require('gl-vec3/dot')
@@ -50,7 +51,7 @@ function TurntableController(zoomMin, zoomMax, center, up, right, radius, theta,
   this.radius = filterVector([radius])
   this.angle  = filterVector([theta, phi])
   this.angle.bounds = [[-Infinity,-Math.PI/2], [Infinity,Math.PI/2]]
-  this.setZoomBounds(zoomMin, zoomMax)
+  this.setDistanceLimits(zoomMin, zoomMax)
 
   this.computedCenter = this.center.curve(0)
   this.computedUp     = this.up.curve(0)
@@ -69,9 +70,19 @@ function TurntableController(zoomMin, zoomMax, center, up, right, radius, theta,
 
 var proto = TurntableController.prototype
 
-proto.setZoomBounds = function(minDist, maxDist) {
-  minDist = minDist || 0.0
-  maxDist = maxDist || Infinity
+proto.setDistanceLimits = function(minDist, maxDist) {
+  this.radius.bounds[0][0] = minDist
+  this.radius.bounds[0][1] = maxDist
+}
+
+proto.getDistanceLimits = function(out) {
+  var bounds = this.radius.bounds[0]
+  if(out) {
+    out[0] = bounds[0]
+    out[1] = bounds[1]
+    return out
+  }
+  return bounds
 }
 
 proto.recalcMatrix = function(t) {
@@ -177,12 +188,36 @@ proto.getMatrix = function(t, result) {
   return mat
 }
 
+var zAxis = [0,0,0]
 proto.rotate = function(t, dtheta, dphi, droll) {
   this.angle.move(t, dtheta, dphi)
-}
+  if(droll) {
+    this.recalcMatrix(t)
 
-proto.zoom = function(t, dz) {
-  this.radius.move(t, dz)
+    var mat = this.computedMatrix
+    zAxis[0] = mat[2]
+    zAxis[1] = mat[6]
+    zAxis[2] = mat[10]
+
+    var up     = this.computedUp
+    var right  = this.computedRight
+    var toward = this.computedToward
+
+    for(var i=0; i<3; ++i) {
+      mat[4*i]   = up[i]
+      mat[4*i+1] = right[i]
+      mat[4*i+2] = toward[i]
+    }
+    rotateM(mat, mat, droll, zAxis)
+    for(var i=0; i<3; ++i) {
+      up[i] =    mat[4*i]
+      right[i] = mat[4*i+1]
+    }
+    console.log(up, right)
+
+    this.up.set(t, up[0], up[1], up[2])
+    this.right.set(t, right[0], right[1], right[2])
+  }
 }
 
 proto.pan = function(t, dx, dy, dz) {
@@ -213,23 +248,22 @@ proto.pan = function(t, dx, dy, dz) {
   ry /= rl
   rz /= rl
 
-  var fx = mat[2]
-  var fy = mat[6]
-  var fz = mat[10]
-  var fu = fx * ux + fy * uy + fz * uz
-  var fr = fx * rx + fy * ry + fz * rz
-  fx -= fu * ux + fr * rx
-  fy -= fu * uy + fr * ry
-  fz -= fu * uz + fr * rz
-  var fl = len3(fx, fy, fz)
-  fx /= fl
-  fy /= fl
-  fz /= fl
-
-  var vx = rx * dx + ux * dy + fx * dz
-  var vy = ry * dx + uy * dy + fy * dz
-  var vz = rz * dx + uz * dy + fz * dz
+  var vx = rx * dx + ux * dy
+  var vy = ry * dx + uy * dy
+  var vz = rz * dx + uz * dy
   this.center.move(t, vx, vy, vz)
+
+  //Update z-component of radius
+  var radius = Math.exp(this.computedRadius[0])
+  radius = Math.max(1e-4, radius + dz)
+  this.radius.set(t, Math.log(radius))
+}
+
+proto.translate = function(t, dx, dy, dz) {
+  this.center.move(t,
+    dx||0.0,
+    dy||0.0,
+    dz||0.0)
 }
 
 //Recenters the coordinate axes
@@ -407,8 +441,14 @@ proto.getCenter = function(t, out) {
   return center
 }
 
-proto.getZoom = function(t) {
+proto.getDistance = function(t) {
   return Math.exp(this.radius.curve(t)[0])
+}
+
+proto.setDistance = function(t, d) {
+  if(d > 0) {
+    this.radius.set(t, Math.log(d))
+  }
 }
 
 proto.lookAt = function(t, eye, center, up) {
