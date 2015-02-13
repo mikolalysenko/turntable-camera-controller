@@ -71,18 +71,27 @@ function TurntableController(zoomMin, zoomMax, center, up, right, radius, theta,
 var proto = TurntableController.prototype
 
 proto.setDistanceLimits = function(minDist, maxDist) {
+  if(minDist > 0) {
+    minDist = Math.log(minDist)
+  } else {
+    minDist = -Infinity
+  }
+  if(maxDist > 0) {
+    maxDist = Math.log(maxDist)
+  }
+  maxDist = Math.max(maxDist, minDist)
   this.radius.bounds[0][0] = minDist
-  this.radius.bounds[0][1] = maxDist
+  this.radius.bounds[1][0] = maxDist
 }
 
 proto.getDistanceLimits = function(out) {
   var bounds = this.radius.bounds[0]
   if(out) {
-    out[0] = bounds[0]
-    out[1] = bounds[1]
+    out[0] = Math.exp(bounds[0][0])
+    out[1] = Math.exp(bounds[1][0])
     return out
   }
-  return bounds
+  return [ Math.exp(bounds[0][0]), Math.exp(bounds[1][0]) ]
 }
 
 proto.recalcMatrix = function(t) {
@@ -228,6 +237,8 @@ proto.pan = function(t, dx, dy, dz) {
   this.recalcMatrix(t)
   var mat = this.computedMatrix
 
+  var dist = Math.exp(this.computedRadius[0])
+
   var ux = mat[1]
   var uy = mat[5]
   var uz = mat[9]
@@ -247,6 +258,9 @@ proto.pan = function(t, dx, dy, dz) {
   rx /= rl
   ry /= rl
   rz /= rl
+
+  dx *= dist
+  dy *= dist
 
   var vx = rx * dx + ux * dy
   var vy = ry * dx + uy * dy
