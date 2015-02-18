@@ -259,9 +259,6 @@ proto.pan = function(t, dx, dy, dz) {
   ry /= rl
   rz /= rl
 
-  dx *= dist
-  dy *= dist
-
   var vx = rx * dx + ux * dy
   var vy = ry * dx + uy * dy
   var vz = rz * dx + uz * dy
