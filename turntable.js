@@ -222,7 +222,6 @@ proto.rotate = function(t, dtheta, dphi, droll) {
       up[i] =    mat[4*i]
       right[i] = mat[4*i+1]
     }
-    console.log(up, right)
 
     this.up.set(t, up[0], up[1], up[2])
     this.right.set(t, right[0], right[1], right[2])
