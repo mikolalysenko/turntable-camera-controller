@@ -78,6 +78,8 @@ proto.setDistanceLimits = function(minDist, maxDist) {
   }
   if(maxDist > 0) {
     maxDist = Math.log(maxDist)
+  } else {
+    maxDist = Infinity
   }
   maxDist = Math.max(maxDist, minDist)
   this.radius.bounds[0][0] = minDist
@@ -152,7 +154,6 @@ proto.recalcMatrix = function(t) {
   var mat = this.computedMatrix
   for(var i=0; i<3; ++i) {
     var x      = wx * right[i] + wy * toward[i] + wz * up[i]
-    eye[i]     = center[i] - radius * x
     mat[4*i+1] = sx * right[i] + sy * toward[i] + sz * up[i]
     mat[4*i+2] = x
     mat[4*i+3] = 0.0
@@ -176,11 +177,15 @@ proto.recalcMatrix = function(t) {
   mat[8] = cz
 
   for(var i=0; i<3; ++i) {
+    eye[i] = center[i] + mat[2+4*i]*radius
+  }
+
+  for(var i=0; i<3; ++i) {
     var rr = 0.0
     for(var j=0; j<3; ++j) {
       rr += mat[i+4*j] * eye[j]
     }
-    mat[12+i] = rr
+    mat[12+i] = -rr
   }
   mat[15] = 1.0
 }
@@ -374,19 +379,20 @@ proto.setMatrix = function(t, mat, axes, noSnap) {
 
   this.angle.jump(t, theta, phi)
 
+  this.recalcMatrix(t)
+  var dx = mat[2]
+  var dy = mat[6]
+  var dz = mat[10]
+
   var imat = this.computedMatrix
   invert44(imat, mat)
-  var w  = -imat[15]
+  var w  = imat[15]
   var ex = imat[12] / w
   var ey = imat[13] / w
   var ez = imat[14] / w
 
-  var gs = Math.exp(this.radius.curve(t)[0])
-
-  var dx = mat[2]
-  var dy = mat[6]
-  var dz = mat[10]
-  this.center.jump(t, ex+dx*gs, ey+dy*gs, ez+dz*gs)
+  var gs = Math.exp(this.computedRadius[0])
+  this.center.jump(t, ex-dx*gs, ey-dy*gs, ez-dz*gs)
 }
 
 proto.lastT = function() {
@@ -412,47 +418,6 @@ proto.flush = function(t) {
   this.right.flush(t)
   this.radius.flush(t)
   this.angle.flush(t)
-}
-
-
-proto.getUp = function(t, out) {
-  this.up.curve(t)
-  var up = this.computedUp
-  if(out) {
-    out[0] = up[0]
-    out[1] = up[1]
-    out[2] = up[2]
-    return out
-  }
-  return up
-}
-
-proto.getEye = function(t, out) {
-  this.recalcMatrix(t)
-  var eye = this.computedEye
-  if(out) {
-    out[0] = eye[0]
-    out[1] = eye[1]
-    out[2] = eye[2]
-    return out
-  }
-  return eye
-}
-
-proto.getCenter = function(t, out) {
-  this.recalcMatrix(t)
-  var center = this.computedCenter
-  if(out) {
-    out[0] = center[0]
-    out[1] = center[1]
-    out[2] = center[2]
-    return out
-  }
-  return center
-}
-
-proto.getDistance = function(t) {
-  return Math.exp(this.radius.curve(t)[0])
 }
 
 proto.setDistance = function(t, d) {
