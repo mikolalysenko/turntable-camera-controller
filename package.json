@@ -25,7 +25,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mikolalysenko/turntable-controller.git"
+    "url": "https://github.com/mikolalysenko/turntable-camera-controller.git"
   },
   "keywords": [
     "camera",
@@ -35,7 +35,7 @@
   "author": "Mikola Lysenko",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mikolalysenko/turntable-controller/issues"
+    "url": "https://github.com/mikolalysenko/turntable-camera-controller/issues"
   },
-  "homepage": "https://github.com/mikolalysenko/turntable-controller"
+  "homepage": "https://github.com/mikolalysenko/turntable-camera-controller"
 }
