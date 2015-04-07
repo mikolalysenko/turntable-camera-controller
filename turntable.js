@@ -465,7 +465,7 @@ proto.lookAt = function(t, eye, center, up) {
   rz -= ru * uz
   var rl = len3(rx, ry, rz)
 
-  if(rl > 1e-6) {
+  if(rl < 0.01) {
     rx = uy * tz - uz * ty
     ry = uz * tx - ux * tz
     rz = ux * ty - uy * tx
